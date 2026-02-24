@@ -18,7 +18,6 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential libgl1-mesa-dev
 
-    # 1. Собираем shaderc из исходников
     - name: Build BGFX Shaderc
       run: |
         mkdir bgfx-build
@@ -34,31 +33,25 @@ jobs:
         chmod +x ../../../../shaderc
         cd ../../../..
 
-    # 2. Скачиваем готовый MaterialBinTool JAR из релизов
     - name: Download MaterialBinTool
       run: |
-        # Скачиваем последний релиз JAR напрямую
         wget $(curl -s https://api.github.com/repos/ddf8196/MaterialBinTool/releases/latest \
           | grep "browser_download_url.*\.jar" \
           | head -1 \
           | cut -d '"' -f 4) -O mbt.jar
 
-    # 3. Устанавливаем Java для запуска JAR
     - name: Setup Java
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
 
-    # 4. Скачиваем include файлы
     - name: Download Includes
       run: |
         mkdir include
         wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_shader.sh -O include/bgfx_shader.sh
         wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_compute.sh -O include/bgfx_compute.sh
-        wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/shader.sh -O include/shader.sh
 
-    # 5. Компилируем шейдер
     - name: Compile Shader
       run: |
         java -jar mbt.jar -c \
