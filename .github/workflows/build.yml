@@ -19,7 +19,7 @@ jobs:
     - name: Build MaterialBinTool (C++ Version)
       run: |
         # Используем C++ форк, чтобы cmake работал
-        git clone --recursive https://github.com/jason0511/MaterialBinTool.git mbt_repo
+        git clone --recursive https://github.com/ZanyCat/MaterialBinTool.git mbt_repo
         cd mbt_repo
         mkdir build && cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release
