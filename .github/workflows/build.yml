@@ -1,0 +1,51 @@
+name: Build Bedrock Shader
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake make g++ git libgl1-mesa-dev
+
+    - name: Build MaterialBinTool (C++ Version)
+      run: |
+        git clone --recursive https://github.com/ddf8196/MaterialBinTool.git mbt_repo
+        cd mbt_repo
+        mkdir build && cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+        make -j4
+        # Копируем готовый инструмент в корень
+        cp MaterialBinTool ../../mbt
+        
+    - name: Download Shader Includes
+      run: |
+        # Нам нужны стандартные файлы BGFX, чтобы шейдеры понимали команды
+        mkdir include
+        wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_shader.sh -O include/bgfx_shader.sh
+        wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_compute.sh -O include/bgfx_compute.sh
+        wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/shader.sh -O include/shader.sh
+
+    - name: Compile Shader
+      run: |
+        chmod +x mbt
+        # Запускаем компиляцию
+        # -c : компилировать
+        # -i : входной json
+        # -o : выходной файл
+        # -I : папка с include файлами (bgfx_shader.sh)
+        ./mbt -c -i src/material.json -o material.bin -I include/
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: material-bin
+        path: material.bin
