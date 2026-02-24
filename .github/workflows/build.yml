@@ -1,6 +1,8 @@
 name: Build Bedrock Shader
 
 on:
+  push:
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
@@ -11,38 +13,32 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    # 1. Установка Java 11 для MaterialBinTool
     - name: Setup Java
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '11'
 
-    # 2. Установка зависимостей для сборки C++ (нужно для shaderc)
     - name: Install C++ Dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential libgl1-mesa-dev
 
-    # 3. Сборка компилятора SHADERC из исходников (самый надежный способ)
     - name: Build BGFX Shaderc
       run: |
-        # Создаем папку для исходников bgfx
         mkdir bgfx-build
         cd bgfx-build
-        # Скачиваем компоненты движка
         git clone --depth 1 https://github.com/bkaradzic/bx.git
         git clone --depth 1 https://github.com/bkaradzic/bimg.git
         git clone --depth 1 https://github.com/bkaradzic/bgfx.git
-        # Собираем инструменты
         cd bgfx
-        make linux-release64 tools
-        # Копируем готовый shaderc в корень проекта
-        cp .build/linux64_gcc/bin/shadercRelease ../../shaderc
-        chmod +x ../../shaderc
-        cd ../..
+        ../bx/tools/bin/linux/genie --with-tools --gcc=linux-gcc gmake
+        cd .build/projects/gmake-linux-gcc
+        make shaderc config=release64
+        cp ../../../.build/linux64_gcc/bin/shadercRelease ../../../../shaderc
+        chmod +x ../../../../shaderc
+        cd ../../../..
 
-    # 4. Сборка MaterialBinTool (Java)
     - name: Build MaterialBinTool
       run: |
         git clone https://github.com/ddf8196/MaterialBinTool.git mbt_repo
@@ -51,7 +47,6 @@ jobs:
         ./gradlew shadowJar -x test
         find build/libs -name "MaterialBinTool-*-all.jar" -exec cp {} ../mbt.jar \;
 
-    # 5. Скачивание библиотек шейдеров (.sh файлы)
     - name: Download Includes
       run: |
         mkdir include
@@ -59,7 +54,6 @@ jobs:
         wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_compute.sh -O include/bgfx_compute.sh
         wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/shader.sh -O include/shader.sh
 
-    # 6. Финальная компиляция
     - name: Compile Shader
       run: |
         java -jar mbt.jar -c \
