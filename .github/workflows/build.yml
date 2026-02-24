@@ -1,4 +1,4 @@
-name: Explore Structure
+name: Matrix Mode Shader
 
 on:
   push:
@@ -26,17 +26,62 @@ jobs:
           | head -1 \
           | cut -d '"' -f 4) -O mbt.jar
 
-    - name: Unpack and Show
+    # 1. Распаковка
+    - name: Unpack
       run: |
-        java -jar mbt.jar -u -o unpacked RenderChunk.material.bin
-        echo "=== ALL FILES ==="
-        find unpacked -type f
-        echo "=== JSON CONTENT ==="
-        find unpacked -name "*.json" -exec echo "FILE: {}" \; -exec cat {} \;
+        # Распаковываем в папку 'work'
+        java -jar mbt.jar -u -o work RenderChunk.material.bin
 
-    - name: Upload Unpacked
-      if: always()
+    # 2. Модификация (Самое важное)
+    - name: Apply Matrix Effect
+      run: |
+        echo "Injecting Matrix code..."
+        
+        # Находим ВСЕ фрагментные шейдеры в папке Opaque
+        find work/RenderChunk/Opaque -name "*.Fragment.glsl" | while read filename; do
+          echo "Modifying: $filename"
+          
+          # 1. Сохраняем "шапку" файла (все строки ДО void main)
+          # Это нужно, чтобы сохранить все uniform и in переменные
+          sed -n '/void main/q;p' "$filename" > header.tmp
+          
+          # 2. Создаем новую функцию main (Зеленый фильтр)
+          cat > body.tmp <<EOF
+        void main() {
+            // Получаем цвет текстуры блока
+            highp vec4 texColor = texture(s_MatTexture, v_texcoord0);
+            
+            // Делаем черно-белым
+            highp float gray = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
+            
+            // Красим в ярко-зеленый (стиль Матрицы)
+            // Если пиксель прозрачный (листва), оставляем прозрачность
+            if (texColor.a < 0.5) discard;
+            
+            highp vec3 matrixColor = vec3(0.0, gray * 1.5, 0.0);
+            
+            // Выводим результат
+            bgfx_FragColor = vec4(matrixColor, 1.0);
+        }
+        EOF
+          
+          # 3. Соединяем шапку и новое тело обратно в файл
+          cat header.tmp body.tmp > "$filename"
+          
+        done
+        
+        # Чистим временные файлы
+        rm header.tmp body.tmp
+
+    # 3. Запаковка
+    - name: Repack
+      run: |
+        # Важно: указываем путь к папке, где лежит .json файл
+        java -jar mbt.jar -r -o RenderChunk.material.bin work/RenderChunk
+
+    # 4. Загрузка
+    - name: Upload Result
       uses: actions/upload-artifact@v4
       with:
-        name: unpacked-files
-        path: unpacked/
+        name: MatrixRenderChunk
+        path: RenderChunk.material.bin
