@@ -1,35 +1,42 @@
-name: Build Bedrock Shader
+name: Build Java Shader
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Install Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y cmake make g++ git libgl1-mesa-dev
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '21'
 
-    - name: Build MaterialBinTool (C++ Version)
+    - name: Build MaterialBinTool (Java)
       run: |
-        # Используем C++ форк, чтобы cmake работал
-        git clone --recursive https://github.com/ZanyCat/MaterialBinTool.git mbt_repo
+        # Скачиваем официальный Java репозиторий
+        git clone https://github.com/ddf8196/MaterialBinTool.git mbt_repo
         cd mbt_repo
-        mkdir build && cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release
-        make -j4
-        # Копируем готовый инструмент в главную папку
-        cp MaterialBinTool ../../mbt
+        # Даем права на выполнение скрипта сборки
+        chmod +x gradlew
+        # Собираем JAR файл (без тестов, чтобы быстрее)
+        ./gradlew shadowJar -x test
+        # Переносим готовый файл в главную папку под именем mbt.jar
+        find build/libs -name "MaterialBinTool-*-all.jar" -exec cp {} ../mbt.jar \;
 
-    - name: Download Shader Includes
+    - name: Download Compiler & Includes
       run: |
-        # Скачиваем файлы, необходимые для понимания кода шейдеров
+        # 1. Скачиваем shaderc (компилятор) для Linux
+        # Берем стабильный бинарник из проверенного источника
+        wget https://github.com/hatchibombotar/MaterialBinTool/raw/master/shaderc -O shaderc
+        chmod +x shaderc
+
+        # 2. Скачиваем include-файлы (библиотеки шейдеров)
         mkdir include
         wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_shader.sh -O include/bgfx_shader.sh
         wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_compute.sh -O include/bgfx_compute.sh
@@ -37,9 +44,19 @@ jobs:
 
     - name: Compile Shader
       run: |
-        chmod +x mbt
-        # Команда компиляции
-        ./mbt -c -i src/material.json -o material.bin -I include/
+        # Запускаем Java версию инструмента
+        # Флаги:
+        # -c : режим компиляции
+        # -i : входной json
+        # -o : выходной bin
+        # --shaderc : путь к скачанному компилятору
+        # --include : папка с библиотеками
+        
+        java -jar mbt.jar -c \
+          -i src/material.json \
+          -o material.bin \
+          --shaderc ./shaderc \
+          --include include/
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
