@@ -52,16 +52,39 @@ jobs:
         wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_shader.sh -O include/bgfx_shader.sh
         wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_compute.sh -O include/bgfx_compute.sh
 
-    - name: Compile Shader
+    # Сначала узнаем какие команды принимает программа
+    - name: Check MBT Help
       run: |
-        java -jar mbt.jar -c \
-          -i src/material.json \
-          -o material.bin \
-          --shaderc ./shaderc \
-          --include include/
+        echo "=== MaterialBinTool Help ==="
+        java -jar mbt.jar --help || true
+        java -jar mbt.jar -h || true
+        java -jar mbt.jar || true
+        echo "=== Shaderc Help ==="
+        ./shaderc --help || true
+        echo "=== Files ==="
+        ls -la
+        ls -la src/
 
-    - name: Upload Artifact
+    # Пробуем разные варианты запуска
+    - name: Try Compile Shader
+      continue-on-error: true
+      run: |
+        echo "=== Attempt 1 ==="
+        java -jar mbt.jar -c -i src/material.json -o material.bin --shaderc ./shaderc --include include/ || true
+        echo "=== Attempt 2 ==="
+        java -jar mbt.jar compile -i src/material.json -o material.bin || true
+        echo "=== Attempt 3 ==="
+        java -jar mbt.jar -i src/material.json -o material.bin || true
+        echo "=== Check results ==="
+        ls -la *.bin 2>/dev/null || echo "No .bin files found"
+
+    # Загружаем всё что есть - логи и файлы
+    - name: Upload Everything
       uses: actions/upload-artifact@v4
       with:
-        name: material-bin
-        path: material.bin
+        name: debug-output
+        path: |
+          *.bin
+          *.jar
+          src/
+          include/
