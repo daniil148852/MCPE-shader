@@ -1,0 +1,19 @@
+{
+  "format_version": "1.0.0",
+  "name": "entity_alphatest",
+  "passes": {
+    "gbuffer": {
+      "vs": "shader.vert.sc",
+      "ps": "shader.frag.sc",
+      "renderStates": [
+        { "state": "disable_culling" },
+        { "state": "disable_depth_write" }
+      ],
+      "vertexFields": [
+        { "field": "position" },
+        { "field": "color0" }
+      ],
+      "varyings": "varying.def.sc"
+    }
+  }
+}
