@@ -18,7 +18,17 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential libgl1-mesa-dev
 
+    # Проверяем кэш - если shaderc уже собран, пропускаем сборку
+    - name: Cache Shaderc
+      id: cache-shaderc
+      uses: actions/cache@v4
+      with:
+        path: shaderc
+        key: shaderc-linux-x64-v1
+
+    # Собираем shaderc ТОЛЬКО если кэша нет
     - name: Build BGFX Shaderc
+      if: steps.cache-shaderc.outputs.cache-hit != 'true'
       run: |
         mkdir bgfx-build
         cd bgfx-build
@@ -52,7 +62,6 @@ jobs:
         wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_shader.sh -O include/bgfx_shader.sh
         wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_compute.sh -O include/bgfx_compute.sh
 
-    # Сначала узнаем какие команды принимает программа
     - name: Check MBT Help
       run: |
         echo "=== MaterialBinTool Help ==="
@@ -60,25 +69,23 @@ jobs:
         java -jar mbt.jar -h || true
         java -jar mbt.jar || true
         echo "=== Shaderc Help ==="
-        ./shaderc --help || true
+        ./shaderc --help 2>&1 | head -30 || true
         echo "=== Files ==="
         ls -la
         ls -la src/
 
-    # Пробуем разные варианты запуска
     - name: Try Compile Shader
       continue-on-error: true
       run: |
         echo "=== Attempt 1 ==="
-        java -jar mbt.jar -c -i src/material.json -o material.bin --shaderc ./shaderc --include include/ || true
+        java -jar mbt.jar -c -i src/material.json -o material.bin --shaderc ./shaderc --include include/ 2>&1 || true
         echo "=== Attempt 2 ==="
-        java -jar mbt.jar compile -i src/material.json -o material.bin || true
+        java -jar mbt.jar compile -i src/material.json -o material.bin 2>&1 || true
         echo "=== Attempt 3 ==="
-        java -jar mbt.jar -i src/material.json -o material.bin || true
+        java -jar mbt.jar -i src/material.json -o material.bin 2>&1 || true
         echo "=== Check results ==="
         ls -la *.bin 2>/dev/null || echo "No .bin files found"
 
-    # Загружаем всё что есть - логи и файлы
     - name: Upload Everything
       uses: actions/upload-artifact@v4
       with:
