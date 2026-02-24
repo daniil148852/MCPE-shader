@@ -9,7 +9,7 @@ jobs:
 
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Install Dependencies
       run: |
@@ -18,17 +18,18 @@ jobs:
 
     - name: Build MaterialBinTool (C++ Version)
       run: |
-        git clone --recursive https://github.com/ddf8196/MaterialBinTool.git mbt_repo
+        # Используем C++ форк, чтобы cmake работал
+        git clone --recursive https://github.com/Mihai-2022/MaterialBinTool.git mbt_repo
         cd mbt_repo
         mkdir build && cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release
         make -j4
-        # Копируем готовый инструмент в корень
+        # Копируем готовый инструмент в главную папку
         cp MaterialBinTool ../../mbt
-        
+
     - name: Download Shader Includes
       run: |
-        # Нам нужны стандартные файлы BGFX, чтобы шейдеры понимали команды
+        # Скачиваем файлы, необходимые для понимания кода шейдеров
         mkdir include
         wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_shader.sh -O include/bgfx_shader.sh
         wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_compute.sh -O include/bgfx_compute.sh
@@ -37,15 +38,11 @@ jobs:
     - name: Compile Shader
       run: |
         chmod +x mbt
-        # Запускаем компиляцию
-        # -c : компилировать
-        # -i : входной json
-        # -o : выходной файл
-        # -I : папка с include файлами (bgfx_shader.sh)
+        # Команда компиляции
         ./mbt -c -i src/material.json -o material.bin -I include/
 
     - name: Upload Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: material-bin
         path: material.bin
