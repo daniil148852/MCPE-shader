@@ -1,4 +1,4 @@
-name: Build Matrix Shader
+name: Explore Structure
 
 on:
   push:
@@ -13,35 +13,12 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Install Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential libgl1-mesa-dev
-
-    # === КЭШИРОВАНИЕ SHADERC (Чтобы было быстро) ===
-    - name: Cache Shaderc
-      id: cache-shaderc
-      uses: actions/cache@v4
+    - name: Setup Java
+      uses: actions/setup-java@v4
       with:
-        path: shaderc
-        key: shaderc-linux-x64-v2
+        distribution: 'temurin'
+        java-version: '17'
 
-    - name: Build BGFX Shaderc
-      if: steps.cache-shaderc.outputs.cache-hit != 'true'
-      run: |
-        git clone --depth 1 https://github.com/bkaradzic/bx.git
-        git clone --depth 1 https://github.com/bkaradzic/bimg.git
-        git clone --depth 1 https://github.com/bkaradzic/bgfx.git
-        cd bgfx
-        ../bx/tools/bin/linux/genie --with-tools --gcc=linux-gcc gmake
-        cd .build/projects/gmake-linux-gcc
-        make shaderc config=release64
-        cd ../../..
-        cp .build/linux64_gcc/bin/shadercRelease ../shaderc
-        chmod +x ../shaderc
-        cd ..
-
-    # === СКАЧИВАНИЕ MBT ===
     - name: Download MaterialBinTool
       run: |
         wget $(curl -s https://api.github.com/repos/ddf8196/MaterialBinTool/releases/latest \
@@ -49,79 +26,17 @@ jobs:
           | head -1 \
           | cut -d '"' -f 4) -O mbt.jar
 
-    - name: Setup Java
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
-
-    - name: Download Includes
-      run: |
-        mkdir include
-        wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_shader.sh -O include/bgfx_shader.sh
-        wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_compute.sh -O include/bgfx_compute.sh
-
-    # === ГЛАВНАЯ МАГИЯ ===
-    
-    # 1. Распаковка RenderChunk
-    - name: Unpack RenderChunk.material.bin
+    - name: Unpack and Show
       run: |
         java -jar mbt.jar -u -o unpacked RenderChunk.material.bin
+        echo "=== ALL FILES ==="
+        find unpacked -type f
+        echo "=== JSON CONTENT ==="
+        find unpacked -name "*.json" -exec echo "FILE: {}" \; -exec cat {} \;
 
-    # 2. ЗАМЕНА КОДА (Делаем мир ЗЕЛЕНЫМ)
-    - name: Inject Custom Code
-      run: |
-        # Ищем файл фрагментного шейдера. 
-        # В RenderChunk их может быть много, берем самый главный (обычно первый попавшийся .sc)
-        FRAG_FILE=$(find unpacked -name "*fragment.sc" | head -1)
-        echo "Modifying shader file: $FRAG_FILE"
-        
-        # Переписываем код шейдера. 
-        # ВНИМАНИЕ: Мы игнорируем текстуры, чтобы код 100% сработал без ошибок переменных.
-        # Весь мир станет процедурно-зеленым.
-        
-        cat > "$FRAG_FILE" <<EOF
-        \$input v_color0, v_fog, v_pos
-        #include <bgfx_shader.sh>
-        
-        void main() {
-            // Эффект МАТРИЦЫ / DEBUG VIEW
-            
-            // Базовый цвет - черный
-            vec3 color = vec3(0.0, 0.0, 0.0);
-            
-            // Добавляем зеленые линии на основе координат блока
-            float grid = step(0.9, fract(v_pos.x)) + step(0.9, fract(v_pos.y));
-            
-            // Если мы на линии сетки - ярко зеленый, иначе - темно зеленый
-            if (grid > 0.5) {
-                color = vec3(0.0, 1.0, 0.0);
-            } else {
-                color = vec3(0.0, 0.2, 0.0);
-            }
-            
-            gl_FragColor = vec4(color, 1.0);
-        }
-        EOF
-        
-        echo "Shader code replaced!"
-
-    # 3. Компиляция и запаковка
-    - name: Compile & Repack
-      run: |
-        # Находим JSON для сборки
-        JSON_FILE=$(find unpacked -name "*.json" | head -1)
-        
-        # Собираем
-        java -jar mbt.jar -c \
-             -s ./shaderc \
-             -i include/ \
-             -o NewRenderChunk.material.bin \
-             "$JSON_FILE"
-
-    # 4. Загрузка
-    - name: Upload Result
+    - name: Upload Unpacked
+      if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: MatrixShader
-        path: NewRenderChunk.material.bin
+        name: unpacked-files
+        path: unpacked/
