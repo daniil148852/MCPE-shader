@@ -1,6 +1,8 @@
-Builderc-linux-x64-v2: Build Matrix Shader
+name: Build Matrix Shader
 
 on:
+  push:
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
@@ -22,7 +24,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: shaderc
-        key:shaderc-linux-x64-v2
+        key: shaderc-linux-x64-v2
 
     - name: Build BGFX Shaderc
       if: steps.cache-shaderc.outputs.cache-hit != 'true'
