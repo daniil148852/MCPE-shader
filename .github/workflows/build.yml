@@ -15,28 +15,26 @@ jobs:
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '21'
+        # Ставим Java 11, так как Gradle 6.7 не работает с Java 21
+        java-version: '11'
 
     - name: Build MaterialBinTool (Java)
       run: |
-        # Скачиваем официальный Java репозиторий
         git clone https://github.com/ddf8196/MaterialBinTool.git mbt_repo
         cd mbt_repo
-        # Даем права на выполнение скрипта сборки
         chmod +x gradlew
-        # Собираем JAR файл (без тестов, чтобы быстрее)
+        # Собираем JAR
         ./gradlew shadowJar -x test
-        # Переносим готовый файл в главную папку под именем mbt.jar
+        # Копируем результат
         find build/libs -name "MaterialBinTool-*-all.jar" -exec cp {} ../mbt.jar \;
 
     - name: Download Compiler & Includes
       run: |
-        # 1. Скачиваем shaderc (компилятор) для Linux
-        # Берем стабильный бинарник из проверенного источника
+        # Скачиваем linux-версию компилятора shaderc
         wget https://github.com/hatchibombotar/MaterialBinTool/raw/master/shaderc -O shaderc
         chmod +x shaderc
 
-        # 2. Скачиваем include-файлы (библиотеки шейдеров)
+        # Скачиваем необходимые библиотеки
         mkdir include
         wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_shader.sh -O include/bgfx_shader.sh
         wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_compute.sh -O include/bgfx_compute.sh
@@ -44,14 +42,7 @@ jobs:
 
     - name: Compile Shader
       run: |
-        # Запускаем Java версию инструмента
-        # Флаги:
-        # -c : режим компиляции
-        # -i : входной json
-        # -o : выходной bin
-        # --shaderc : путь к скачанному компилятору
-        # --include : папка с библиотеками
-        
+        # Запускаем сборку
         java -jar mbt.jar -c \
           -i src/material.json \
           -o material.bin \
