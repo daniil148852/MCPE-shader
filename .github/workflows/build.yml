@@ -7,23 +7,18 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Setup Java
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '11'
-
-    - name: Install C++ Dependencies
+    - name: Install Dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential libgl1-mesa-dev
 
+    # 1. Собираем shaderc из исходников
     - name: Build BGFX Shaderc
       run: |
         mkdir bgfx-build
@@ -39,14 +34,23 @@ jobs:
         chmod +x ../../../../shaderc
         cd ../../../..
 
-    - name: Build MaterialBinTool
+    # 2. Скачиваем готовый MaterialBinTool JAR из релизов
+    - name: Download MaterialBinTool
       run: |
-        git clone https://github.com/ddf8196/MaterialBinTool.git mbt_repo
-        cd mbt_repo
-        chmod +x gradlew
-        ./gradlew shadowJar -x test
-        find build/libs -name "MaterialBinTool-*-all.jar" -exec cp {} ../mbt.jar \;
+        # Скачиваем последний релиз JAR напрямую
+        wget $(curl -s https://api.github.com/repos/ddf8196/MaterialBinTool/releases/latest \
+          | grep "browser_download_url.*\.jar" \
+          | head -1 \
+          | cut -d '"' -f 4) -O mbt.jar
 
+    # 3. Устанавливаем Java для запуска JAR
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    # 4. Скачиваем include файлы
     - name: Download Includes
       run: |
         mkdir include
@@ -54,6 +58,7 @@ jobs:
         wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_compute.sh -O include/bgfx_compute.sh
         wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/shader.sh -O include/shader.sh
 
+    # 5. Компилируем шейдер
     - name: Compile Shader
       run: |
         java -jar mbt.jar -c \
