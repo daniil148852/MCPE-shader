@@ -18,20 +18,16 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential libgl1-mesa-dev
 
-    # Проверяем кэш - если shaderc уже собран, пропускаем сборку
     - name: Cache Shaderc
       id: cache-shaderc
       uses: actions/cache@v4
       with:
         path: shaderc
-        key: shaderc-linux-x64-v1
+        key: shaderc-linux-x64-v2
 
-    # Собираем shaderc ТОЛЬКО если кэша нет
     - name: Build BGFX Shaderc
       if: steps.cache-shaderc.outputs.cache-hit != 'true'
       run: |
-        mkdir bgfx-build
-        cd bgfx-build
         git clone --depth 1 https://github.com/bkaradzic/bx.git
         git clone --depth 1 https://github.com/bkaradzic/bimg.git
         git clone --depth 1 https://github.com/bkaradzic/bgfx.git
@@ -39,9 +35,15 @@ jobs:
         ../bx/tools/bin/linux/genie --with-tools --gcc=linux-gcc gmake
         cd .build/projects/gmake-linux-gcc
         make shaderc config=release64
-        cp ../../../.build/linux64_gcc/bin/shadercRelease ../../../../shaderc
-        chmod +x ../../../../shaderc
-        cd ../../../..
+        cd ../../..
+        cp .build/linux64_gcc/bin/shadercRelease ../shaderc
+        chmod +x ../shaderc
+        cd ..
+
+    - name: Verify Shaderc
+      run: |
+        ls -la shaderc
+        ./shaderc --help 2>&1 | head -5 || true
 
     - name: Download MaterialBinTool
       run: |
@@ -62,36 +64,37 @@ jobs:
         wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_shader.sh -O include/bgfx_shader.sh
         wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_compute.sh -O include/bgfx_compute.sh
 
-    - name: Check MBT Help
+    - name: Compile Shader
       run: |
-        echo "=== MaterialBinTool Help ==="
-        java -jar mbt.jar --help || true
-        java -jar mbt.jar -h || true
-        java -jar mbt.jar || true
-        echo "=== Shaderc Help ==="
-        ./shaderc --help 2>&1 | head -30 || true
-        echo "=== Files ==="
-        ls -la
-        ls -la src/
+        echo "=== Trying different command formats ==="
 
-    - name: Try Compile Shader
-      continue-on-error: true
-      run: |
-        echo "=== Attempt 1 ==="
-        java -jar mbt.jar -c -i src/material.json -o material.bin --shaderc ./shaderc --include include/ 2>&1 || true
-        echo "=== Attempt 2 ==="
-        java -jar mbt.jar compile -i src/material.json -o material.bin 2>&1 || true
-        echo "=== Attempt 3 ==="
-        java -jar mbt.jar -i src/material.json -o material.bin 2>&1 || true
-        echo "=== Check results ==="
-        ls -la *.bin 2>/dev/null || echo "No .bin files found"
+        # Формат: java -jar mbt.jar [options] <file>
+        # files = позиционный аргумент в конце
 
-    - name: Upload Everything
+        echo "--- Try 1: compile with all flags ---"
+        java -jar mbt.jar -c -s ./shaderc -i include/ -o material.bin src/material.json 2>&1 || true
+
+        echo "--- Try 2: unpack first to see format ---"
+        java -jar mbt.jar -u -o unpacked/ src/material.json 2>&1 || true
+
+        echo "--- Try 3: compile directory ---"
+        java -jar mbt.jar -c -s ./shaderc -i include/ -o material.bin src/ 2>&1 || true
+
+        echo "--- Try 4: compile json directly ---"
+        java -jar mbt.jar -c -s ./shaderc -o material.bin src/material.json 2>&1 || true
+
+        echo "=== Check all results ==="
+        find . -name "*.bin" -type f 2>/dev/null
+        ls -la *.bin 2>/dev/null || echo "No .bin files in root"
+        ls -la unpacked/ 2>/dev/null || echo "No unpacked dir"
+
+    - name: Upload Result
+      if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: debug-output
+        name: shader-output
         path: |
           *.bin
           *.jar
+          unpacked/
           src/
-          include/
